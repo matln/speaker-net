@@ -1,0 +1,35 @@
+/BeDeprecated
+/challenge
+/ToDo
+/develop
+/.vim
+__pycache__
+*.pyc
+._.DS_Store
+.DS_Store
+._*
+tmp*
+.vim/
+**/data/*
+*.csv
+*.ignore
+
+**/local/**/__pycache__
+/recipes/voxceleb1o2
+/recipes/voxceleb2/data/
+/recipes/voxceleb2/exp/
+/recipes/voxceleb2/tmp/
+/recipes/voxceleb2/nemo_load.py
+
+# **/exp/**/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]_[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/*
+# !**/exp/**/config/
+# !**/exp/**/results/
+# !**/exp/**/backup/
+# **/exp/**/backup/*
+# !**/exp/**/log/
+# **/exp/**/log/*
+# !**/exp/**/checkpoints/
+# **/exp/**/checkpoints/*
+# !**/exp/**/embeddings/
+# **/exp/**/embeddings/*
+# !**/exp/**/README

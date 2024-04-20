@@ -1,0 +1,184 @@
+# -------------------------------------------------------------------------------------- #
+# Set seed
+seed: 1024
+# For fully resumable training, it should be False, but will consume more training time.
+benchmark: False
+# Set False when use conv1d with dilation, otherwise it is extremely slow
+deterministic: False
+
+# Format: "epoch.iteration" or "epoch", e.g., "1.2000", "1"
+warmup_epoch: "1"
+# Format: "epoch.iteration" or "epoch", e.g., "1.2000", "1"
+increase_start_epoch: "1"
+
+# -------------------------------- Training options ------------------------------------ #
+# Feature parameters
+features: "fbank"
+feat_params:
+    sample_rate: 16000
+    n_fft: 512
+    window_size: 0.025
+    window_stride: 0.01
+    num_bins: 80
+    preemph: 0.97    # null or 0.97
+    log: True    # log_mel
+    dither: 0.0    # 0.0 or 0.00001
+    cmvn: True
+    norm_var: False
+
+dataset_params:
+    egs_dir: "exp/egs/waveform_2s"
+    chunk2lang: "exp/egs/waveform_2s/chunk2lang"
+    duration: 2.0
+    samplerate: 16000
+    frame_overlap: 0.015
+    random_segment: False
+    delimiter: ","
+    p: 0.8
+    aug: True
+    aug_conf: "hparams/speech_aug_chain.yaml"
+
+loader_params:
+    num_workers: 16
+    pin_memory: True
+    prefetch_factor: 2
+    batch_size: 128    # will be multiplied by 2 (paired data)
+    speaker_aware_sampling: False
+    num_samples_cls: 2
+    paired_sampling: True
+    seed: !ref <seed>
+
+encoder_params:
+    channels: 512
+    emb_dim: 256
+    dropout: 0.
+    training: True
+    extracted_embedding: "near"
+
+    pooling: "channel_context"  # statistics, lde, attentive, multi-head, multi-resolution
+    pooling_params:
+        num_head: 1
+        hidden_size: 128
+        share: False
+        affine_layers: 2
+        context: [0]
+        stddev: True
+        temperature: False
+        fixed: True
+        nonlinearity: "tanh"
+        global_context_att: True
+
+    # Add fc1 may boost the minDCF. Add fc1 for PLDA.
+    fc1: False
+    fc1_params:
+        nonlinearity: 'relu'
+        nonlinearity_params: {inplace: True}
+        bn-relu: False
+        bn: True
+        bn_params: {momentum: 0.1, affine: False, track_running_stats: True}
+
+    fc2_params:
+        nonlinearity: ''
+        nonlinearity_params: {inplace: True}
+        bn-relu: False
+        bn: True
+        bn_params: {momentum: 0.1, affine: False, track_running_stats: True}
+
+    margin_loss: True
+    margin_loss_params:
+        method: "am"
+        m: 0.2
+        feature_normalize: True
+        s: 35
+        K: 3    # subcenter
+        topk: 5    # inter-topk
+        topk_m: 0.06    # 0.06
+        easy_margin: False
+
+    use_step: True
+    step_params:
+        T: null
+        m: True
+        lambda_0: 0
+        lambda_b: 1000
+        increase_start_epoch: !ref <increase_start_epoch>
+        alpha: 5
+        gamma: 0.0001
+        s: False
+        s_tuple: (30, 12)
+        s_list: null
+        t: False
+        t_tuple: (0.5, 1.2)
+
+optimizer_params:
+    name: "sgd"
+    learn_rate: 0.02
+    beta1: 0.9
+    weight_decay: 0.0001    # you may need weight_decay for large models, stable AMP training, small datasets, or when lower augmentations are used
+    nesterov: True
+
+lr_scheduler_params:
+    name: "MultiStepLR"
+    IterMultiStepLR.milestones: [302865, 504775, 706685]    # 20191 * 15, 20191 * 25, 20191 * 35
+    IterMultiStepLR.gamma: 0.1
+    MultiStepLR.milestones: [15, 25, 35]
+    MultiStepLR.gamma: 0.1
+    stepLR.step_size: 1
+    stepLR.gamma: 0.9
+    cyclic.max_lr: 0.002
+    cyclic.base_lr: 0.00000002
+    cyclic.step_size_up: 100955
+    cyclic.step_size_down: null
+    cyclic.mode: "triangular2"
+    cyclic.gamma: 1.0
+    cyclic.scale_fn: null
+    cyclic.scale_mode: "cycle"
+    cyclic.cycle_momentum: False
+    cyclic.base_momentum: 0.8
+    cyclic.max_momentum: 0.9
+    reduceP.metric: 'val_loss'
+    reduceP.check_interval: 16000  # 0 means check metric after every epoch and 1 means every iter.
+    reduceP.factor: 0.1  # scale of lr in every times.
+    reduceP.patience: 2
+    reduceP.threshold: 0.0001
+    reduceP.cooldown: 0
+    reduceP.min_lr: 0.000001
+    ExponentialDecay.final_lr: 0.00001
+    ExponentialDecay.num_epochs: !ref <trainer_params[epochs]>
+    warmup_epoch: !ref <warmup_epoch>
+
+# -------------------------------------------------------------------------------------- #
+# Modules
+encoder: speakernet/models/ecapa-tdnn.py
+trainer: speakernet/training/trainer.py
+bunch: speakernet/dataio/bunch.py
+
+# -------------------------------------------------------------------------------------- #
+trainer_params:
+    use_tensorboard: False
+    mixed_prec: False    # Mixed precision training
+    epochs: 40    # Total epochs to train. It is important.
+    saved_step: 201920
+    report_times_every_epoch: null
+    # About validation computation and loss reporting. If report_times_every_epoch is not None,
+    report_interval_iters: 1000
+    ckpt_interval_minutes: 10    # save checkpoint every N min
+    compute_one_batch_val: False
+    exist_encoder: ''  # Use it in transfer learning.
+
+
+# -------------------------------------------------------------------------------------- #
+# Extract embeddings
+extract_positions: "near"
+extract_data: "voxceleb1"
+data_path: "data"  # It contains all dataset just like Kaldi recipe.
+preprocess: True
+force: False
+sleep_time: 60
+cmn: True
+fixed_length_params:
+    chunk_size: -1
+    egs_type: "chunk"
+    batch_size: 512
+    num_workers: 2
+    pin_memory: "false"

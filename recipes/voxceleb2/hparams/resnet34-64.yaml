@@ -1,0 +1,194 @@
+# Note that all parameters in the config can also be manually adjusted with --ARG VALUE
+# -------------------------------------------------------------------------------------- #
+# Set seed
+seed: 1024
+# For fully resumable training, it should be False, but will consume more training time.
+benchmark: False
+
+# Format: "epoch.iteration" or "epoch", e.g., "1.2000", "1"
+warmup_epoch: "1"
+# Format: "epoch.iteration" or "epoch", e.g., "1.2000", "1"
+increase_start_epoch: "1"
+
+# -------------------------------- Training options ------------------------------------ #
+# Feature parameters
+
+features: "fbank"
+feat_params:
+    sample_rate: 16000
+    n_fft: 512
+    window_size: 0.025
+    window_stride: 0.01
+    num_bins: 80
+    preemph: 0.97    # null or 0.97
+    log: True    # log_mel
+    dither: 0.0    # 0.0 or 0.00001
+    cmvn: True
+    norm_var: False
+# features: "kaldi_fbank"
+# feat_params:
+#     samp_freq: 16000
+#     num_bins: 80
+#     frame_length_ms: 25
+#     frame_shift_ms: 10
+#     dither: 0.0    # 0.0 or 1
+#     preemph_coeff: 0.97
+#     use_log_fbank: True
+#     window_type: "povey"
+#     low_freq: 20
+#     high_freq: 0
+#     use_energy: True
+#     energy_floor: 0
+#     raw_energy: True
+#     remove_dc_offset: True
+#     cmvn: True
+#     norm_var: False
+
+dataset_params:
+    egs_dir: "exp/egs/waveform_2s"
+    duration: 2.0
+    samplerate: 16000
+    frame_overlap: 0.015
+    random_segment: False
+    delimiter: ","
+    aug: True
+    aug_conf: "hparams/speech_aug_chain.yaml"
+
+loader_params:
+    num_workers: 16
+    pin_memory: True
+    batch_size: 256
+    speaker_aware_sampling: False
+    paired_sampling: False
+    num_samples_cls: 8
+    seed: !ref <seed>
+
+encoder_params:
+    dropout: 0.
+    training: True
+    extracted_embedding: "near"
+    resnet_params:
+        head_conv: True
+        head_conv_params: {kernel_size: 3, stride: 1, padding: 1}
+        head_maxpool: False
+        head_maxpool_params: {kernel_size: 3, stride: 2, padding: 1}
+        block: "BasicBlock"
+        layers: [3, 4, 6, 3]
+        planes: [64, 128, 256, 512]
+        convXd: 2
+        norm_layer_params: {momentum: 0.5, affine: True}
+        full_pre_activation: True
+        zero_init_residual: False
+
+    pooling: "multi-head"  # statistics, lde, attentive, multi-head, multi-resolution
+    pooling_params:
+        num_head: 16
+        share: True
+        affine_layers: 1
+        hidden_size: 64
+        context: [0]
+        stddev: True
+        temperature: False
+        fixed: True
+
+    # Add fc1 will boost the minDCF
+    fc1: False
+    fc1_params:
+        nonlinearity: 'relu'
+        nonlinearity_params: {inplace: True}
+        bn-relu: False
+        bn: True
+        bn_params: {momentum: 0.5, affine: False, track_running_stats: True}
+
+    fc2_params:
+        nonlinearity: ''
+        nonlinearity_params: {inplace: True}
+        bn-relu: False
+        bn: True
+        bn_params: {momentum: 0.5, affine: False, track_running_stats: True}
+
+    margin_loss: True
+    margin_loss_params:
+        method: "am"
+        m: 0.2
+        feature_normalize: True
+        s: 35
+        K: 3    # subcenter
+        topk: 5    # inter-topk
+        topk_m: 0.06    # 0.06
+        easy_margin: False
+
+    use_step: True
+    step_params:
+        T: null
+        m: True
+        lambda_0: 0
+        lambda_b: 1000
+        increase_start_epoch: !ref <increase_start_epoch>
+        alpha: 5
+        gamma: 0.0001
+        s: False
+        s_tuple: (30, 12)
+        s_list: null
+        t: False
+        t_tuple: (0.5, 1.2)
+
+optimizer_params:
+    name: "sgd"
+    learn_rate: 0.02
+    beta1: 0.9
+    weight_decay: 0.0001    # you may need weight_decay for large models, stable AMP training, small datasets, or when lower augmentations are used
+    nesterov: True
+
+lr_scheduler_params:
+    name: "MultiStepLR"
+    MultiStepLR.milestones: [15, 25, 35]
+    MultiStepLR.gamma: 0.1
+    stepLR.step_size: 1
+    stepLR.gamma: 0.9
+    reduceP.metric: 'val_loss'
+    reduceP.check_interval: 16000  # 0 means check metric after every epoch and 1 means every iter.
+    reduceP.factor: 0.1  # scale of lr in every times.
+    reduceP.patience: 2
+    reduceP.threshold: 0.0001
+    reduceP.cooldown: 0
+    reduceP.min_lr: 0.000001
+    ExponentialDecay.final_lr: 0.00001
+    ExponentialDecay.num_epochs: !ref <trainer_params[epochs]>
+    warmup_epoch: !ref <warmup_epoch>
+
+# -------------------------------------------------------------------------------------- #
+# Modules
+encoder: speakernet/models/resnet.py
+trainer: speakernet/training/trainer.py
+bunch: speakernet/dataio/bunch.py
+
+# -------------------------------------------------------------------------------------- #
+# Control options
+trainer_params:
+    use_tensorboard: False
+    mixed_prec: True    # Mixed precision training
+    epochs: 40    # Total epochs to train. It is important.
+    saved_step: 150000000
+    report_times_every_epoch: null
+    # About validation computation and loss reporting. If report_times_every_epoch is not None,
+    report_interval_iters: 1000
+    ckpt_interval_minutes: 10 # save checkpoint every N min
+    compute_one_batch_val: False
+    exist_encoder: ''  # Use it in transfer learning.
+
+# -------------------------------------------------------------------------------------- #
+# Extract embeddings
+extract_positions: "near"
+extract_data: "voxceleb1"
+data_path: "data"
+preprocess: True
+force: False
+sleep_time: 60
+cmn: True
+fixed_length_params:
+    chunk_size: -1
+    egs_type: "chunk"
+    batch_size: 512
+    num_workers: 2
+    pin_memory: "false"

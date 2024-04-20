@@ -1,0 +1,8 @@
+mod: chain
+aug_classes:
+    -
+        aug_name: augment_speed
+        aug_type: Speed
+        perturb_prob: 1.0
+        sample_rate: 16000
+        speeds: [0.9, 1.0, 1.1]
